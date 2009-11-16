@@ -1,0 +1,9 @@
+use inc::Module::Install;
+name           'Test-DataLoader-MySQL';
+author         'Takuya Tsuchida tsucchi@cpan.org';
+license        'perl';
+all_from       'lib/Test/DataLoader/MySQL.pm';
+requires       'DBI';
+requires       'DBD::mysql';
+test_requires  'Test::More';
+WriteAll;
