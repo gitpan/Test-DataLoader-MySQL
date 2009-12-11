@@ -3,6 +3,7 @@ abstract: 'Load testdata into MySQL database'
 author:
   - 'Takuya Tsuchida tsucchi@cpan.org'
 build_requires:
+  DBI: 0
   ExtUtils::MakeMaker: 6.42
   Test::More: 0
 configure_requires:
@@ -18,10 +19,11 @@ no_index:
   directory:
     - inc
     - t
+    - xt
 requires:
   DBD::mysql: 0
   DBI: 0
   perl: 5.8.0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.0.2
+version: 0.0.3

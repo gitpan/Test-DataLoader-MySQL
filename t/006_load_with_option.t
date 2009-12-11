@@ -2,12 +2,12 @@
 use strict;
 use warnings;
 use Test::More;
+use DBI;
 
 eval "use Test::mysqld";
 plan skip_all => "Test::mysqld is need for test" if ( $@ );
 
-plan tests => 3;
-
+plan tests => 2;
 use Test::DataLoader::MySQL;
 
 my $mysqld = Test::mysqld->new( my_cnf => {
@@ -20,20 +20,17 @@ $dbh->do("CREATE TABLE foo (id INTEGER, name VARCHAR(20))");
 
 
 my $data = Test::DataLoader::MySQL->new($dbh);
-$data->load_file('t/testdata.pm');
+$data->add('foo', 1,
+           {
+               id => 1,
+               name => 'aaa',
+           },
+           ['id']);
 
-$data->load('foo', 1);#load data #1
-$data->load('foo', 2);#load data #2
+$data->load('foo', 1, { name=>'bbb' });#load data #1 but name is altered to 'aaa'->'bbb'
+is_deeply( $data->_loaded, [['foo', {id=>1, name=>'bbb'}, ['id']]]);
+is_deeply($data->do_select('foo', "id=1"), { id=>1, name=>'bbb'});
 
-is_deeply($data->do_select('foo', "id=1"), { id=>1, name=>'aaa'});
-is_deeply([$data->do_select('foo', "id IN(1,2)")], [ { id=>1, name=>'aaa'},
-                                                     { id=>2, name=>'bbb'},]);
-
-
-$data->clear;
-
-$data = Test::DataLoader::MySQL->new($dbh);
-is($data->do_select('foo', "1=1"), undef);
 $data->clear;
 
 $mysqld->stop;

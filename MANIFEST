@@ -1,5 +1,6 @@
 ChangeLog
 inc/Module/Install.pm
+inc/Module/Install/AuthorTests.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
 inc/Module/Install/Fetch.pm
@@ -17,7 +18,5 @@ t/002_basic.t
 t/003_autono.t
 t/004_keep_data.t
 t/005_load_external_file.t
-t/996_pod_coverage.t
-t/997_pod.t
-t/perlcriticrc
+t/006_load_with_option.t
 t/testdata.pm
