@@ -20,10 +20,12 @@ no_index:
     - inc
     - t
     - xt
+recommends:
+  Test::mysqld: 0.11
 requires:
   DBD::mysql: 0
   DBI: 0
   perl: 5.8.0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.0.3
+version: 0.0.4
