@@ -5,7 +5,7 @@ use DBI;
 use DBD::mysql;
 use Carp;
 use base qw(Exporter);
-our $VERSION = '0.0.7';
+our $VERSION = '0.1.0';
 use 5.008;
 
 =head1 NAME
@@ -71,8 +71,13 @@ Load testdata into MySQL database.
 =cut
 
 my $singleton; #instance object is shared for reading data from external file.
+END {#delete data if test code is abort
+    if (defined $singleton &&  @{ $singleton->{loaded} } ) {
+        $singleton->clear;
+    }
+}
 
-=head2 new
+=head2 new($dbh, %options)
 
 create new instance
 parameter $dbh(provided by DBI) is required;
@@ -83,6 +88,8 @@ If Keep option is NOT specified(default), loaded data is deleted when instance i
   my $data = Test::DataLoader::MySQL->new($dbh); # loaded data is deleted when $data is DESTROYed
   # or
   my $data = Test::DataLoader::MySQL->new($dbh, Keep => 1); # loaded data is remain
+  # or
+  my $data = Test::DataLoader::MySQL->new($dbh, DeleteBeforeInsert => 1); # delete data which has same keys before load
 
 if you want to use external file and in external file, use init() instead of new().
 
@@ -95,8 +102,10 @@ sub new {
 
     $self = {
         dbh => $dbh,
-        loaded => [],
-        Keep => exists $options{Keep} ? $options{Keep} :  0,
+        loaded   => [],
+        keynames => undef,#keys set in  set_keys()
+        Keep               => !!$options{Keep},
+        DeleteBeforeInsert => !!$options{DeleteBeforeInsert},
     };
 
     bless $self, $class;
@@ -104,7 +113,7 @@ sub new {
     return $self;
 }
 
-=head2 add
+=head2 add($table_name, $data_id, $data_href, $keynames_aref)
 
 add testdata into this modules (not loading testdata)
 
@@ -120,6 +129,8 @@ add testdata into this modules (not loading testdata)
 table_name and data_id is like a database's key. For example, table_name is 'foo' and data_id is 1 and 'foo' and 2 is dealt with defferent data even if contained data is equal( ex id=>1, name=>'aaa').
 
 Key is important, because when $data is DESTROYed, this module delete all data which had been loaded and deleted data is found by specified key(s) in this method.
+
+if set_keys() was called before, $keynames_aref is ommittable.
 
 =cut
 
@@ -156,9 +167,19 @@ sub load {
     my ($table_name, $data_id, $option_href) = @_;
 
     my %data = $self->_data_with_option($table_name, $data_id, $option_href);
-    my $keynames_aref = $self->{data}->{$table_name}->{$data_id}->{key};
+    my $keynames_aref = $self->_get_keys($table_name, $data_id);
 
     return $self->_load($table_name, $keynames_aref, %data);
+}
+
+sub _get_keys {
+    my $self = shift;
+    my ($table_name, $data_id) = @_;
+    my $keynames_aref = $self->{data}->{$table_name}->{$data_id}->{key};
+    if ( $self->_aref_is_empty($keynames_aref) ) {
+        $keynames_aref = $self->{keynames}->{$table_name};
+    }
+    return $keynames_aref;
 }
 
 sub _data_with_option {
@@ -176,7 +197,7 @@ sub _data_with_option {
 
 
 
-=head2 load_direct
+=head2 load_direct($table_name, $data_href, $keynames_aref)
 
 load testdata from this module into database directly.
 
@@ -193,6 +214,8 @@ is equivalent to
  $data->add('foo', 1, { id=>1, name=>'aaa' }, ['id']);
  my $key = $data->load('foo', 1);
 
+if set_keys() was called before, $keynames_aref is ommittable.
+
 =cut
 
 
@@ -200,6 +223,9 @@ sub load_direct {
     my $self = shift;
     my ($table_name, $data_href, $keynames_aref) = @_;
     my %data = %{ $data_href };
+    if ( $self->_aref_is_empty($keynames_aref) ) {
+        $keynames_aref = $self->{keynames}->{$table_name};
+    }
 
     return $self->_load($table_name, $keynames_aref, %data);
 }
@@ -208,7 +234,10 @@ sub _load {
     my $self = shift;
     my ($table_name, $keynames_aref, %data) = @_;
 
-    croak "primary keys are not defined\n" if ( !defined $keynames_aref || !@{ $keynames_aref } );
+    croak "primary keys are not defined\n" if ( $self->_aref_is_empty($keynames_aref) );
+    if ( $self->{DeleteBeforeInsert} && $self->_data_for_key_exists($keynames_aref, %data) ) {
+        $self->_delete($table_name, \%data, $keynames_aref);
+    }
     $self->_do_insert($table_name, %data);
     my $keys = $self->_primary_keys($keynames_aref, \%data);
     $self->{dbh}->do('commit');
@@ -217,6 +246,21 @@ sub _load {
 
     return $keys;
 
+}
+
+sub _aref_is_empty {
+    my $self = shift;
+    my ($keynames_aref) = @_;
+    return !defined $keynames_aref || !@{ $keynames_aref };
+}
+
+sub _data_for_key_exists {
+    my $self = shift;
+    my ($keynames_aref, %data) = @_;
+    for my $key ( @{ $keynames_aref } ) {
+        return 0 if ( !exists $data{$key} );
+    }
+    return 1;
 }
 
 
@@ -273,6 +317,15 @@ sub init {
     return $self;
 }
 
+=head2 set_keys($table_name, $keynames_aref)
+set primary key information
+
+=cut
+sub set_keys {
+    my $self = shift;
+    my($table_name, $keynames_aref) = @_;
+    $self->{keynames}->{$table_name} = $keynames_aref;
+}
 
 sub _primary_keys {
     my $self = shift;
